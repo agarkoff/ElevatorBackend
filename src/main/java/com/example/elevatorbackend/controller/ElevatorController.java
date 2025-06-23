@@ -29,6 +29,16 @@ public class ElevatorController {
 
     private long timestamp = 0;
 
+    private int getCooldownSeconds() {
+        try {
+            String cooldown = FileUtils.readFileToString(new File("cooldown.txt"), "UTF-8").trim();
+            return Integer.parseInt(cooldown);
+        } catch (Exception e) {
+            log.warn("Не удалось прочитать cooldown.txt, используется значение по умолчанию 60 секунд: {}", e.getMessage());
+            return 60; // значение по умолчанию
+        }
+    }
+
     @PostMapping("post")
     public Long post(@RequestParam("code") String code, @RequestParam("relay") String relay) throws IOException {
         log.info("call elevator with code: {}, relay={}", code, relay);
@@ -38,9 +48,10 @@ public class ElevatorController {
         }
         long now = System.currentTimeMillis() / 1000;
         long delta = now - timestamp;
-        if (delta < 60) {
-            log.info("нельзя вызывать лифт чаще, чем один раз в минуту, прошло только {} секунд", delta);
-            return 300 + (60 - delta);
+        int cooldownSeconds = getCooldownSeconds();
+        if (delta < cooldownSeconds) {
+            log.info("нельзя вызывать лифт чаще, чем один раз в {} секунд, прошло только {} секунд", cooldownSeconds, delta);
+            return 300 + (cooldownSeconds - delta);
         }
         String url = String.format("http://%s/relay_cgi.cgi?type={type}&relay={relay}&on={on}&time={time}&pwd={pwd}", relayIp);
         ResponseEntity<String> responseEntity = restTemplate.getForEntity(url, String.class, Map.of(
